@@ -1,0 +1,14 @@
+# contracts
+contracts/out/
+contracts/cache/
+contracts/lib/
+
+# sdk
+sdk/node_modules/
+sdk/dist/
+
+# general
+.env
+.env.local
+*.log
+.DS_Store
