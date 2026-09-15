@@ -53,16 +53,16 @@ moment one breaks.
 
 ## How it works
 
-Sentinel is two pieces that work together:
+Sentinel is built from a few pieces that work together:
 
 ```
-┌─────────────────────────┐         ┌──────────────────────────┐
-│   contracts/              │  emits  │   sdk/                     │
-│   Sentinel.sol             │ ──────▶ │   watches for the event,   │
-│   (inherited by your       │ Sentinel│   fans it out to your      │
-│   contract, checks run     │ Alert   │   Discord/Telegram/        │
-│   inline in your logic)    │ event   │   webhook                  │
-└─────────────────────────┘         └──────────────────────────┘
+┌─────────────────────────┐         ┌──────────────────────────┐         ┌───────────────────────┐
+│   contracts/              │  emits  │   sdk/                     │  posts  │   backend/              │
+│   Sentinel.sol             │ ──────▶ │   watches for the event,   │ ──────▶ │   stores alert history, │
+│   (inherited by your       │ Sentinel│   fans it out to your      │  JSON   │   serves it back via    │
+│   contract, checks run     │ Alert   │   Discord/Telegram/        │         │   a small REST API      │
+│   inline in your logic)    │ event   │   webhook                  │         │   (optional)            │
+└─────────────────────────┘         └──────────────────────────┘         └───────────────────────┘
 ```
 
 1. Your contract inherits `Sentinel` and calls a `_check*` function at the
@@ -74,6 +74,9 @@ Sentinel is two pieces that work together:
    a small VM, a serverless function) listens for that event on-chain and
    pushes a formatted alert to Discord, Telegram, or any webhook you
    configure.
+4. Optionally, point the SDK's `webhookNotifier` at `sentinel-backend` to
+   keep a queryable history of every alert, instead of (or alongside)
+   Discord/Telegram notifications.
 
 Sentinel never takes custody of funds and holds no state about your
 protocol beyond the thresholds each check is called with. It's a
@@ -107,6 +110,13 @@ sentinel/
 │   ├── test/
 │   └── package.json
 │
+├── backend/                 # minimal alert-history API (JSON file, no DB)
+│   ├── src/
+│   │   ├── index.js               # Express server + endpoints
+│   │   └── store.js               # JSON-file read/write helpers
+│   ├── data/                      # alerts.json lives here (gitignored)
+│   └── package.json
+│
 ├── CONTRIBUTING.md
 ├── LICENSE
 └── README.md                # you are here
@@ -132,11 +142,19 @@ cd sdk
 npm install
 npm run build
 npm test
+cd ..
+
+# backend
+cd backend
+npm install
+npm start
 ```
 
-If both `forge test` and `npm test` pass, you're fully set up. See
-[`contracts/README.md`](./contracts/README.md) and
-[`sdk/README.md`](./sdk/README.md) for details specific to each half.
+If `forge test`, `npm test` (in `sdk`), and `npm start` (in `backend`) all
+work, you're fully set up. See [`contracts/README.md`](./contracts/README.md),
+[`sdk/README.md`](./sdk/README.md), and
+[`backend/README.md`](./backend/README.md) for details specific to each
+part.
 
 ## Usage
 
