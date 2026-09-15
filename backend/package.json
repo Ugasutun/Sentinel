@@ -1,0 +1,14 @@
+{
+  "name": "sentinel-backend",
+  "version": "0.1.0",
+  "description": "Minimal API that stores and serves Sentinel alert history.",
+  "license": "MIT",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.0"
+  }
+}

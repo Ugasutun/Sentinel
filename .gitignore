@@ -7,6 +7,10 @@ contracts/lib/
 sdk/node_modules/
 sdk/dist/
 
+# backend
+backend/node_modules/
+backend/data/alerts.json
+
 # general
 .env
 .env.local

@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Sentinel Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<style>
+  :root {
+    --bg: #0b0f14;
+    --panel: #121822;
+    --panel-border: #1f2937;
+    --text: #e5e7eb;
+    --muted: #8b96a5;
+    --accent: #ef4444;
+    --ok: #22c55e;
+    --warn: #f59e0b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 32px 24px 64px;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+  header h1 { font-size: 22px; margin: 0; }
+  .badge {
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .badge.ok { background: rgba(34,197,94,0.15); color: var(--ok); }
+  .badge.down { background: rgba(239,68,68,0.15); color: var(--accent); }
+  .badge.checking { background: rgba(139,150,165,0.15); color: var(--muted); }
+  p.sub { color: var(--muted); margin-top: 4px; font-size: 14px; }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    margin-top: 24px;
+    overflow: hidden;
+  }
+  .panel-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--panel-border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .panel-header h2 { font-size: 15px; margin: 0; font-weight: 600; }
+  .panel-header .count { color: var(--muted); font-size: 13px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td {
+    text-align: left;
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--panel-border);
+    white-space: nowrap;
+  }
+  th {
+    color: var(--muted);
+    font-weight: 500;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  tr:last-child td { border-bottom: none; }
+  td.mono { font-family: ui-monospace, "SF Mono", Consolas, monospace; color: var(--muted); }
+
+  .kind-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    background: rgba(239,68,68,0.12);
+    color: var(--accent);
+  }
+
+  .empty {
+    padding: 40px 18px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+  }
+
+  .footer-note {
+    margin-top: 24px;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+  .footer-note code {
+    background: var(--panel);
+    padding: 1px 5px;
+    border-radius: 4px;
+    border: 1px solid var(--panel-border);
+  }
+
+  .refresh-btn {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    color: var(--text);
+    font-size: 12px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .refresh-btn:hover { border-color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>🛡️ Sentinel</h1>
+    <span id="status-badge" class="badge checking">checking…</span>
+  </header>
+  <p class="sub">Runtime alert history for your monitored contracts.</p>
+
+  <div class="panel">
+    <div class="panel-header">
+      <h2>Alert history</h2>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span id="alert-count" class="count"></span>
+        <button class="refresh-btn" onclick="loadAlerts()">Refresh</button>
+      </div>
+    </div>
+    <div id="alerts-container">
+      <div class="empty">Loading…</div>
+    </div>
+  </div>
+
+  <p class="footer-note">
+    Reading from <code id="api-base-display"></code>. Alerts arrive here
+    automatically once <code>sentinel-sdk</code>'s <code>webhookNotifier</code>
+    is pointed at this backend's <code>/alerts</code> endpoint — this page
+    just polls <code>GET /alerts</code> every few seconds.
+  </p>
+
+</div>
+
+<script>
+  // Change this if your backend runs somewhere other than localhost:4000
+  const API_BASE = "http://localhost:4000";
+  document.getElementById("api-base-display").textContent = API_BASE;
+
+  function setStatus(state) {
+    const el = document.getElementById("status-badge");
+    el.className = "badge " + state;
+    el.textContent = state === "ok" ? "backend online" : state === "down" ? "backend offline" : "checking…";
+  }
+
+  function fmtTime(iso) {
+    try {
+      return new Date(iso).toLocaleString();
+    } catch {
+      return iso;
+    }
+  }
+
+  function renderAlerts(alerts) {
+    const container = document.getElementById("alerts-container");
+    document.getElementById("alert-count").textContent =
+      alerts.length + (alerts.length === 1 ? " alert" : " alerts");
+
+    if (alerts.length === 0) {
+      container.innerHTML = '<div class="empty">No alerts yet. Once your contracts emit a SentinelAlert and the SDK forwards it here, it\'ll show up in this list.</div>';
+      return;
+    }
+
+    const rows = alerts.map(a => `
+      <tr>
+        <td>${fmtTime(a.receivedAt)}</td>
+        <td><span class="kind-pill">${escapeHtml(a.kind ?? "-")}</span></td>
+        <td class="mono">${escapeHtml(a.contract ?? "-")}</td>
+        <td class="mono">${escapeHtml(a.actor ?? "-")}</td>
+        <td>${escapeHtml(String(a.observed ?? "-"))}</td>
+        <td>${escapeHtml(String(a.threshold ?? "-"))}</td>
+        <td class="mono">${escapeHtml(a.txHash ?? "-")}</td>
+      </tr>
+    `).join("");
+
+    container.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Received</th>
+            <th>Kind</th>
+            <th>Contract</th>
+            <th>Actor</th>
+            <th>Observed</th>
+            <th>Threshold</th>
+            <th>Tx hash</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  async function loadAlerts() {
+    try {
+      const healthRes = await fetch(API_BASE + "/health");
+      setStatus(healthRes.ok ? "ok" : "down");
+
+      const alertsRes = await fetch(API_BASE + "/alerts");
+      const alerts = await alertsRes.json();
+      renderAlerts(alerts);
+    } catch (err) {
+      setStatus("down");
+      document.getElementById("alerts-container").innerHTML =
+        '<div class="empty">Could not reach the backend at ' + API_BASE + '. Make sure it\'s running (<code>npm start</code> in the backend folder).</div>';
+    }
+  }
+
+  loadAlerts();
+  setInterval(loadAlerts, 5000); // auto-refresh every 5s
+</script>
+</body>
+</html>
